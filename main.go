@@ -299,7 +299,7 @@ func loadConfig() (config, error) {
 	flag.StringVar(&cfg.location, "location", envOrDefault("NQ_LOCATION", "agent"), "Location label sent as x-monitor-location")
 	flag.BoolVar(&cfg.oneshot, "oneshot", envBoolOrDefault("NQ_ONESHOT", false), "Collect and push once, then exit")
 	flag.BoolVar(&cfg.install, "install", false, "Install binary + systemd service and exit (Linux)")
-	flag.StringVar(&cfg.serviceName, "service-name", envOrDefault("NQ_SERVICE_NAME", "monitoring-agent"), "Systemd service name")
+	flag.StringVar(&cfg.serviceName, "service-name", envOrDefault("NQ_SERVICE_NAME", "mon-agent"), "Systemd service name")
 	flag.StringVar(&cfg.installUser, "install-user", envOrDefault("NQ_INSTALL_USER", "root"), "User for systemd service")
 	flag.StringVar(&cfg.binaryPath, "install-binary-path", envOrDefault("NQ_INSTALL_BINARY_PATH", ""), "Install path for agent binary")
 	flag.StringVar(&cfg.envFilePath, "install-env-path", envOrDefault("NQ_INSTALL_ENV_PATH", ""), "Path for environment file")

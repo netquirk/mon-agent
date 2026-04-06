@@ -1,6 +1,6 @@
 # Build outputs
 /nq-agent
-/monitoring-agent
+/mon-agent
 /*.exe
 /dist/
 /bin/
@@ -9,4 +9,3 @@
 /*.zip
 /*.tar.gz
 /SHA256SUMS.txt
-

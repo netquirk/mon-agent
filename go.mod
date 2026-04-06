@@ -1,3 +1,3 @@
-module github.com/netquirk/monitoring-agent
+module github.com/netquirk/mon-agent
 
 go 1.24

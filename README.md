@@ -76,19 +76,19 @@ At startup the agent detects filesystem type for each monitored disk path.
 
 ```bash
 cd agent
-go build -o nq-agent .
+go build -o mon-agent .
 ```
 
 Print binary version:
 
 ```bash
-./nq-agent -version
+./mon-agent -version
 ```
 
 ## Run
 
 ```bash
-./nq-agent \
+./mon-agent \
   -id "<monitor_uuid>" \
   -interval 60 \
   -disk-paths "/,/tmp,/var"
@@ -110,7 +110,7 @@ Flags (or env vars):
 - `-net` (`NQ_INCLUDE_NET`) default `true`
 - `-insecure-tls` (`NQ_INSECURE_TLS`) default `false`
 - `-install` installs binary + env file + bundled systemd unit and starts the service (Linux only)
-- `-service-name` (`NQ_SERVICE_NAME`) default `monitoring-agent`
+- `-service-name` (`NQ_SERVICE_NAME`) default `mon-agent`
 - `-install-user` (`NQ_INSTALL_USER`) default `root`
 - `-install-binary-path` (`NQ_INSTALL_BINARY_PATH`) default `/usr/local/bin/<service-name>`
 - `-install-env-path` (`NQ_INSTALL_ENV_PATH`) default `/etc/default/<service-name>`
@@ -120,12 +120,12 @@ Flags (or env vars):
 
 The agent binary embeds a systemd service template:
 
-- `agent/systemd/monitoring-agent.service`
+- `agent/systemd/mon-agent.service`
 
 Install and start it:
 
 ```bash
-sudo ./nq-agent \
+sudo ./mon-agent \
   -install \
   -id "<monitor_uuid>" \
   -interval 60 \
@@ -137,11 +137,11 @@ Note: `-install` requires an explicit interval (`-interval` or `NQ_INTERVAL_SECO
 
 This will:
 
-- copy the current binary to `/usr/local/bin/monitoring-agent`
-- write environment config to `/etc/default/monitoring-agent`
-- write service unit to `/etc/systemd/system/monitoring-agent.service`
+- copy the current binary to `/usr/local/bin/mon-agent`
+- write environment config to `/etc/default/mon-agent`
+- write service unit to `/etc/systemd/system/mon-agent.service`
 - run `systemctl daemon-reload`
-- run `systemctl enable --now monitoring-agent.service`
+- run `systemctl enable --now mon-agent.service`
 
 ## GitHub Releases
 

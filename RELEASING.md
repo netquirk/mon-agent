@@ -2,7 +2,7 @@
 
 GitHub releases are automated by workflow:
 
-- [agent-release.yml](/home/josh/Dev/monitoring/.github/workflows/agent-release.yml)
+- `.github/workflows/agent-release.yml`
 
 ## Release Targets
 
@@ -22,7 +22,7 @@ git push origin agent-v1.0.0
 ```
 
 2. GitHub Actions will:
-- run tests for `agent/`
+- run tests
 - build cross-platform binaries
 - package archives
 - generate `SHA256SUMS.txt`
@@ -37,5 +37,5 @@ You can also run the workflow manually with `workflow_dispatch` and provide `ver
 Release binaries embed version via `-ldflags`, and expose:
 
 ```bash
-./monitoring-agent -version
+./mon-agent -version
 ```

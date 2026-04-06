@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-//go:embed systemd/monitoring-agent.service
+//go:embed systemd/mon-agent.service
 var bundledServiceUnit string
 
 func installSystemdService(cfg config) error {
