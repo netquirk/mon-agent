@@ -1,0 +1,15 @@
+[Unit]
+Description=NetQuirk Monitoring Agent ({{SERVICE_NAME}})
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{USER}}
+EnvironmentFile={{ENV_FILE}}
+ExecStart={{BINARY_PATH}}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+# Build outputs
+/nq-agent
+/monitoring-agent
+/*.exe
+/dist/
+/bin/
+
+# Release archives
+/*.zip
+/*.tar.gz
+/SHA256SUMS.txt
+
