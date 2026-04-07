@@ -78,6 +78,10 @@ type pushPayload struct {
 	IngestMode   string            `json:"ingest_mode,omitempty"`
 }
 
+type pushBatchRequest struct {
+	Batch []pushPayload `json:"batch"`
+}
+
 type queueCursor struct {
 	File string `json:"file"`
 	Line int    `json:"line"`
@@ -559,7 +563,55 @@ func pushMetrics(ctx context.Context, client *http.Client, cfg config, payload p
 	return nil
 }
 
+func pushMetricsBatch(ctx context.Context, client *http.Client, cfg config, batch []pushPayload) error {
+	if len(batch) == 0 {
+		return nil
+	}
+
+	body, err := json.Marshal(pushBatchRequest{Batch: batch})
+	if err != nil {
+		return fmt.Errorf("marshal batch payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		strings.TrimRight(cfg.pushURL, "/")+"/batch",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return fmt.Errorf("build batch request: %w", err)
+	}
+	req.Header.Set("content-type", "application/json")
+	req.Header.Set("x-monitor-location", cfg.location)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("post push batch metrics: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("push batch endpoint returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+	var parsed pushResponse
+	if len(respBody) > 0 {
+		if err := json.Unmarshal(respBody, &parsed); err != nil {
+			return fmt.Errorf("push batch endpoint returned invalid json: %w", err)
+		}
+		if !parsed.Success {
+			return fmt.Errorf("push batch endpoint returned success=false")
+		}
+	}
+
+	log.Printf("push batch ok status=%d points=%d", resp.StatusCode, len(batch))
+	return nil
+}
+
 func flushQueue(ctx context.Context, client *http.Client, cfg config) error {
+	const backfillBatchSize = 60
+
 	files, err := queueFiles(cfg.queueDir)
 	if err != nil {
 		return err
@@ -587,6 +639,25 @@ func flushQueue(ctx context.Context, client *http.Client, cfg config) error {
 		scanner := bufio.NewScanner(file)
 		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 		line := 0
+		batch := make([]pushPayload, 0, backfillBatchSize)
+		batchLastLine := -1
+
+		flushBatch := func() error {
+			if len(batch) == 0 {
+				return nil
+			}
+			if err := pushMetricsBatch(ctx, client, cfg, batch); err != nil {
+				return err
+			}
+			cursor = queueCursor{File: filePath, Line: batchLastLine + 1}
+			if err := writeQueueCursor(cfg.queueDir, cursor); err != nil {
+				return err
+			}
+			batch = batch[:0]
+			batchLastLine = -1
+			return nil
+		}
+
 		for scanner.Scan() {
 			if line < startLine {
 				line++
@@ -595,6 +666,10 @@ func flushQueue(ctx context.Context, client *http.Client, cfg config) error {
 
 			raw := strings.TrimSpace(scanner.Text())
 			if raw == "" {
+				if err := flushBatch(); err != nil {
+					file.Close()
+					return err
+				}
 				cursor = queueCursor{File: filePath, Line: line + 1}
 				if err := writeQueueCursor(cfg.queueDir, cursor); err != nil {
 					file.Close()
@@ -607,6 +682,10 @@ func flushQueue(ctx context.Context, client *http.Client, cfg config) error {
 			var payload pushPayload
 			if err := json.Unmarshal([]byte(raw), &payload); err != nil {
 				log.Printf("dropping invalid queued payload line file=%s line=%d err=%v", filepath.Base(filePath), line+1, err)
+				if err := flushBatch(); err != nil {
+					file.Close()
+					return err
+				}
 				cursor = queueCursor{File: filePath, Line: line + 1}
 				if err := writeQueueCursor(cfg.queueDir, cursor); err != nil {
 					file.Close()
@@ -624,17 +703,35 @@ func flushQueue(ctx context.Context, client *http.Client, cfg config) error {
 				}
 			}
 
-			if err := pushMetrics(ctx, client, cfg, payload); err != nil {
-				file.Close()
-				return err
-			}
-
-			cursor = queueCursor{File: filePath, Line: line + 1}
-			if err := writeQueueCursor(cfg.queueDir, cursor); err != nil {
-				file.Close()
-				return err
+			if payload.IngestMode == "backfill" {
+				batch = append(batch, payload)
+				batchLastLine = line
+				if len(batch) >= backfillBatchSize {
+					if err := flushBatch(); err != nil {
+						file.Close()
+						return err
+					}
+				}
+			} else {
+				if err := flushBatch(); err != nil {
+					file.Close()
+					return err
+				}
+				if err := pushMetrics(ctx, client, cfg, payload); err != nil {
+					file.Close()
+					return err
+				}
+				cursor = queueCursor{File: filePath, Line: line + 1}
+				if err := writeQueueCursor(cfg.queueDir, cursor); err != nil {
+					file.Close()
+					return err
+				}
 			}
 			line++
+		}
+		if err := flushBatch(); err != nil {
+			file.Close()
+			return err
 		}
 		scanErr := scanner.Err()
 		if closeErr := file.Close(); closeErr != nil && scanErr == nil {
