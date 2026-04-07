@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,6 +14,8 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -39,6 +42,7 @@ type config struct {
 	includeCPU  bool
 	includeNet  bool
 	insecureTLS bool
+	queueDir    string
 }
 
 type diskTarget struct {
@@ -71,6 +75,16 @@ type pushPayload struct {
 	AgentVersion int               `json:"agent_version"`
 	Timestamp    int64             `json:"ts"`
 	Metrics      map[string]uint64 `json:"metrics"`
+	IngestMode   string            `json:"ingest_mode,omitempty"`
+}
+
+type queueCursor struct {
+	File string `json:"file"`
+	Line int    `json:"line"`
+}
+
+type pushResponse struct {
+	Success bool `json:"success"`
 }
 
 var version = "dev"
@@ -102,6 +116,10 @@ func main() {
 		transport := httpClient.Transport.(*http.Transport).Clone()
 		transport.TLSClientConfig = newInsecureTLSConfig()
 		httpClient.Transport = transport
+	}
+
+	if err := os.MkdirAll(cfg.queueDir, 0o755); err != nil {
+		log.Fatalf("failed to initialize queue dir %q: %v", cfg.queueDir, err)
 	}
 
 	var prevCPU cpuSnapshot
@@ -261,7 +279,16 @@ func main() {
 			Timestamp:    time.Now().Unix(),
 			Metrics:      metrics,
 		}
-		return pushMetrics(ctx, httpClient, cfg, payload)
+		if err := queueAppend(cfg.queueDir, payload); err != nil {
+			return fmt.Errorf("queue append: %w", err)
+		}
+		if err := queueCleanup(cfg.queueDir, time.Now().UTC()); err != nil {
+			log.Printf("queue cleanup failed: %v", err)
+		}
+		if err := flushQueue(ctx, httpClient, cfg); err != nil {
+			return fmt.Errorf("flush queue: %w", err)
+		}
+		return nil
 	}
 
 	if cfg.oneshot {
@@ -317,6 +344,7 @@ func loadConfig() (config, error) {
 	flag.BoolVar(&cfg.includeCPU, "cpu", envBoolOrDefault("NQ_INCLUDE_CPU", true), "Include CPU usage metric")
 	flag.BoolVar(&cfg.includeNet, "net", envBoolOrDefault("NQ_INCLUDE_NET", true), "Include network byte/packet metrics")
 	flag.BoolVar(&cfg.insecureTLS, "insecure-tls", envBoolOrDefault("NQ_INSECURE_TLS", false), "Disable TLS certificate verification")
+	flag.StringVar(&cfg.queueDir, "queue-dir", envOrDefault("NQ_QUEUE_DIR", "/var/lib/mon-agent/queue"), "Local queue directory for durable metric buffering")
 	flag.Parse()
 
 	if cfg.showVersion {
@@ -364,6 +392,10 @@ func loadConfig() (config, error) {
 	}
 	if len(cfg.diskPaths) == 0 {
 		cfg.diskPaths = []string{"/"}
+	}
+	cfg.queueDir = strings.TrimSpace(cfg.queueDir)
+	if cfg.queueDir == "" {
+		return cfg, errors.New("queue-dir must not be empty")
 	}
 
 	return cfg, nil
@@ -496,9 +528,230 @@ func pushMetrics(ctx context.Context, client *http.Client, cfg config, payload p
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("push endpoint returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
+	var parsed pushResponse
+	if len(respBody) > 0 {
+		if err := json.Unmarshal(respBody, &parsed); err != nil {
+			return fmt.Errorf("push endpoint returned invalid json: %w", err)
+		}
+		if !parsed.Success {
+			return fmt.Errorf("push endpoint returned success=false")
+		}
+	}
 
 	log.Printf("push ok status=%d metrics=%d", resp.StatusCode, len(payload.Metrics))
 	return nil
+}
+
+func flushQueue(ctx context.Context, client *http.Client, cfg config) error {
+	files, err := queueFiles(cfg.queueDir)
+	if err != nil {
+		return err
+	}
+	if len(files) == 0 {
+		return nil
+	}
+
+	cursor, err := readQueueCursor(cfg.queueDir)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+	for _, filePath := range files {
+		startLine := 0
+		if cursor.File == filePath {
+			startLine = cursor.Line
+		}
+
+		file, err := os.Open(filePath)
+		if err != nil {
+			return err
+		}
+		scanner := bufio.NewScanner(file)
+		scanner.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+		line := 0
+		for scanner.Scan() {
+			if line < startLine {
+				line++
+				continue
+			}
+
+			raw := strings.TrimSpace(scanner.Text())
+			if raw == "" {
+				cursor = queueCursor{File: filePath, Line: line + 1}
+				if err := writeQueueCursor(cfg.queueDir, cursor); err != nil {
+					file.Close()
+					return err
+				}
+				line++
+				continue
+			}
+
+			var payload pushPayload
+			if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+				log.Printf("dropping invalid queued payload line file=%s line=%d err=%v", filepath.Base(filePath), line+1, err)
+				cursor = queueCursor{File: filePath, Line: line + 1}
+				if err := writeQueueCursor(cfg.queueDir, cursor); err != nil {
+					file.Close()
+					return err
+				}
+				line++
+				continue
+			}
+
+			payload.IngestMode = "live"
+			if payload.Timestamp > 0 {
+				ts := time.Unix(payload.Timestamp, 0).UTC()
+				if now.Sub(ts) > (cfg.interval + cfg.interval) {
+					payload.IngestMode = "backfill"
+				}
+			}
+
+			if err := pushMetrics(ctx, client, cfg, payload); err != nil {
+				file.Close()
+				return err
+			}
+
+			cursor = queueCursor{File: filePath, Line: line + 1}
+			if err := writeQueueCursor(cfg.queueDir, cursor); err != nil {
+				file.Close()
+				return err
+			}
+			line++
+		}
+		scanErr := scanner.Err()
+		if closeErr := file.Close(); closeErr != nil && scanErr == nil {
+			scanErr = closeErr
+		}
+		if scanErr != nil {
+			return scanErr
+		}
+
+		if cursor.File == filePath {
+			if err := os.Remove(filePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			cursor = queueCursor{}
+			if err := writeQueueCursor(cfg.queueDir, cursor); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func queueAppend(queueDir string, payload pushPayload) error {
+	ts := time.Now().UTC()
+	if payload.Timestamp > 0 {
+		ts = time.Unix(payload.Timestamp, 0).UTC()
+	}
+	filePath := filepath.Join(queueDir, ts.Format("2006-01-02")+".ndjson")
+
+	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(append(data, '\n')); err != nil {
+		return err
+	}
+	return nil
+}
+
+func queueFiles(queueDir string) ([]string, error) {
+	entries, err := os.ReadDir(queueDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".ndjson") {
+			continue
+		}
+		out = append(out, filepath.Join(queueDir, name))
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func queueCleanup(queueDir string, now time.Time) error {
+	entries, err := os.ReadDir(queueDir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	cutoff := now.AddDate(0, 0, -30)
+	cursor, _ := readQueueCursor(queueDir)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if !strings.HasSuffix(name, ".ndjson") {
+			continue
+		}
+		datePart := strings.TrimSuffix(name, ".ndjson")
+		d, err := time.Parse("2006-01-02", datePart)
+		if err != nil {
+			continue
+		}
+		if d.Before(cutoff) {
+			path := filepath.Join(queueDir, name)
+			if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+			if cursor.File == path {
+				cursor = queueCursor{}
+				_ = writeQueueCursor(queueDir, cursor)
+			}
+		}
+	}
+	return nil
+}
+
+func queueCursorPath(queueDir string) string {
+	return filepath.Join(queueDir, ".cursor.json")
+}
+
+func readQueueCursor(queueDir string) (queueCursor, error) {
+	var out queueCursor
+	data, err := os.ReadFile(queueCursorPath(queueDir))
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return out, nil
+		}
+		return out, err
+	}
+	if len(bytes.TrimSpace(data)) == 0 {
+		return out, nil
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return queueCursor{}, err
+	}
+	return out, nil
+}
+
+func writeQueueCursor(queueDir string, cursor queueCursor) error {
+	data, err := json.Marshal(cursor)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(queueCursorPath(queueDir), data, 0o644)
 }
 
 func envOrDefault(key, fallback string) string {

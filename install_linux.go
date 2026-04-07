@@ -76,6 +76,7 @@ func buildEnvFile(cfg config) string {
 	fmt.Fprintf(&b, "NQ_INCLUDE_RAM=%t\n", cfg.includeRAM)
 	fmt.Fprintf(&b, "NQ_INCLUDE_NET=%t\n", cfg.includeNet)
 	fmt.Fprintf(&b, "NQ_INSECURE_TLS=%t\n", cfg.insecureTLS)
+	fmt.Fprintf(&b, "NQ_QUEUE_DIR=%s\n", shellQuote(cfg.queueDir))
 	return b.String()
 }
 
