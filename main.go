@@ -72,7 +72,7 @@ type cpuBreakdown struct {
 }
 
 type pushPayload struct {
-	AgentVersion int               `json:"agent_version"`
+	AgentVersion uint64            `json:"agent_version"`
 	Timestamp    int64             `json:"ts"`
 	Metrics      map[string]uint64 `json:"metrics"`
 	IngestMode   string            `json:"ingest_mode,omitempty"`
@@ -111,6 +111,11 @@ func main() {
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 		},
+	}
+
+	encodedAgentVersion, err := encodeSemverVersion(version)
+	if err != nil {
+		log.Fatalf("invalid agent version %q: %v", version, err)
 	}
 	if cfg.insecureTLS {
 		transport := httpClient.Transport.(*http.Transport).Clone()
@@ -280,7 +285,7 @@ func main() {
 		metrics["time_ms"] = uint64(processingMs)
 
 		payload := pushPayload{
-			AgentVersion: 1,
+			AgentVersion: encodedAgentVersion,
 			Timestamp:    time.Now().Unix(),
 			Metrics:      metrics,
 		}
@@ -815,4 +820,42 @@ func percentToScaled100Uint64(v float64) uint64 {
 		return 10000
 	}
 	return uint64((v * 100.0) + 0.5)
+}
+
+func encodeSemverVersion(raw string) (uint64, error) {
+	s := strings.TrimSpace(raw)
+	s = strings.TrimPrefix(s, "v")
+	parts := strings.Split(s, ".")
+	if len(parts) != 3 {
+		return 0, errors.New("expected major.minor.patch")
+	}
+	parse := func(part string) (uint64, error) {
+		if part == "" {
+			return 0, errors.New("empty semver component")
+		}
+		for _, ch := range part {
+			if ch < '0' || ch > '9' {
+				return 0, errors.New("non-numeric semver component")
+			}
+		}
+		return strconv.ParseUint(part, 10, 64)
+	}
+
+	const partMask = (1 << 21) - 1
+	major, err := parse(parts[0])
+	if err != nil {
+		return 0, err
+	}
+	minor, err := parse(parts[1])
+	if err != nil {
+		return 0, err
+	}
+	patch, err := parse(parts[2])
+	if err != nil {
+		return 0, err
+	}
+	if major == 0 || major > partMask || minor > partMask || patch > partMask {
+		return 0, errors.New("semver component out of range for 21-bit encoding")
+	}
+	return (major << 42) | (minor << 21) | patch, nil
 }

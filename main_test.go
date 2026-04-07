@@ -187,7 +187,7 @@ func TestPercentToScaled100Uint64(t *testing.T) {
 
 func TestPushPayloadMetricsMarshalAsIntegers(t *testing.T) {
 	payload := pushPayload{
-		AgentVersion: 1,
+		AgentVersion: (1 << 42) | 1,
 		Timestamp:    1775340000,
 		Metrics: map[string]uint64{
 			"cpu:user": 12,
@@ -201,6 +201,35 @@ func TestPushPayloadMetricsMarshalAsIntegers(t *testing.T) {
 	s := string(b)
 	if strings.Contains(s, ".") {
 		t.Fatalf("expected integer-only JSON values, got %s", s)
+	}
+}
+
+func TestEncodeSemverVersion(t *testing.T) {
+	got, err := encodeSemverVersion("1.2.3")
+	if err != nil {
+		t.Fatalf("encodeSemverVersion failed: %v", err)
+	}
+	want := (uint64(1) << 42) | (uint64(2) << 21) | uint64(3)
+	if got != want {
+		t.Fatalf("unexpected encoding: got=%d want=%d", got, want)
+	}
+
+	got, err = encodeSemverVersion("v10.20.30")
+	if err != nil {
+		t.Fatalf("encodeSemverVersion with v-prefix failed: %v", err)
+	}
+	want = (uint64(10) << 42) | (uint64(20) << 21) | uint64(30)
+	if got != want {
+		t.Fatalf("unexpected v-prefix encoding: got=%d want=%d", got, want)
+	}
+}
+
+func TestEncodeSemverVersionRejectsInvalid(t *testing.T) {
+	invalid := []string{"", "1", "1.2", "dev", "1.2.x", "0.1.2", "2097152.1.1"}
+	for _, input := range invalid {
+		if _, err := encodeSemverVersion(input); err == nil {
+			t.Fatalf("expected error for %q", input)
+		}
 	}
 }
 
