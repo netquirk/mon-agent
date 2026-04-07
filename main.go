@@ -109,7 +109,14 @@ func main() {
 	httpClient := &http.Client{
 		Timeout: cfg.timeout,
 		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
+			Proxy:               http.ProxyFromEnvironment,
+			ForceAttemptHTTP2:   true,
+			DisableKeepAlives:   false,
+			DisableCompression:  true,
+			MaxIdleConns:        1,
+			MaxIdleConnsPerHost: 1,
+			MaxConnsPerHost:     1,
+			IdleConnTimeout:     5 * time.Minute,
 		},
 	}
 
