@@ -189,10 +189,10 @@ func main() {
 				if !ok {
 					continue
 				}
-				bytesDelta := counterDelta(cur.bytes, prev.bytes)
-				packetsDelta := counterDelta(cur.packets, prev.packets)
-				metrics[netBytesMetricKey(iface)] = bytesDelta
-				metrics[netPacketsMetricKey(iface)] = packetsDelta
+				metrics[netBytesMetricKey(iface, "rx")] = counterDelta(cur.rxBytes, prev.rxBytes)
+				metrics[netBytesMetricKey(iface, "tx")] = counterDelta(cur.txBytes, prev.txBytes)
+				metrics[netPacketsMetricKey(iface, "rx")] = counterDelta(cur.rxPackets, prev.rxPackets)
+				metrics[netPacketsMetricKey(iface, "tx")] = counterDelta(cur.txPackets, prev.txPackets)
 			}
 			prevNet = currentNet
 		}
@@ -221,12 +221,13 @@ func main() {
 				elapsed := now.Sub(prevDiskAt).Seconds()
 				if elapsed >= 1 {
 					for _, target := range diskTargets {
-						iops, throughput, ioErr := diskRatesForTarget(prevDisk, currentDisk, target, elapsed)
+						iops, throughputRead, throughputWrite, ioErr := diskRatesForTarget(prevDisk, currentDisk, target, elapsed)
 						if ioErr != nil {
 							continue
 						}
 						metrics[iopsMetricKey(target.path)] = iops
-						metrics[throughputMetricKey(target.path)] = throughput
+						metrics[throughputMetricKey(target.path, "rx")] = throughputRead
+						metrics[throughputMetricKey(target.path, "tx")] = throughputWrite
 					}
 				}
 				prevDisk = currentDisk
@@ -295,7 +296,7 @@ func loadConfig() (config, error) {
 	flag.StringVar(&cfg.monitorID, "id", envOrDefault("NQ_MONITOR_ID", ""), "Monitor UUID")
 	flag.IntVar(&intervalSeconds, "interval", envIntOrDefault("NQ_INTERVAL_SECONDS", 60), "Collection interval in seconds")
 	flag.IntVar(&timeoutSeconds, "timeout", envIntOrDefault("NQ_TIMEOUT_SECONDS", 10), "HTTP timeout in seconds")
-	flag.StringVar(&diskCSV, "disk-paths", envOrDefault("NQ_DISK_PATHS", "/,/tmp"), "Comma-separated disk paths, e.g. /,/tmp,/var")
+	flag.StringVar(&diskCSV, "disk-paths", envOrDefault("NQ_DISK_PATHS", ""), "Comma-separated disk paths, e.g. /,/tmp,/var (default: auto-discover)")
 	flag.StringVar(&cfg.location, "location", envOrDefault("NQ_LOCATION", "agent"), "Location label sent as x-monitor-location")
 	flag.BoolVar(&cfg.oneshot, "oneshot", envBoolOrDefault("NQ_ONESHOT", false), "Collect and push once, then exit")
 	flag.BoolVar(&cfg.install, "install", false, "Install binary + systemd service and exit (Linux)")
@@ -351,6 +352,9 @@ func loadConfig() (config, error) {
 	cfg.interval = time.Duration(intervalSeconds) * time.Second
 	cfg.timeout = time.Duration(timeoutSeconds) * time.Second
 	cfg.diskPaths = parseDiskPaths(diskCSV)
+	if len(cfg.diskPaths) == 0 {
+		cfg.diskPaths = autoDiscoverDiskPaths()
+	}
 	if len(cfg.diskPaths) == 0 {
 		cfg.diskPaths = []string{"/"}
 	}
@@ -427,8 +431,8 @@ func iopsMetricKey(path string) string {
 	return "iops:" + path
 }
 
-func throughputMetricKey(path string) string {
-	return "throughput:" + path
+func throughputMetricKey(path, direction string) string {
+	return "throughput:" + path + ":" + direction
 }
 
 func lvmThinDataMetricKey(vg, lv string) string {
@@ -439,12 +443,12 @@ func lvmThinMetaMetricKey(vg, lv string) string {
 	return "lvm:meta:" + vg + "/" + lv
 }
 
-func netBytesMetricKey(iface string) string {
-	return "net:" + iface + ":bytes"
+func netBytesMetricKey(iface, direction string) string {
+	return "net:" + iface + ":bytes:" + direction
 }
 
-func netPacketsMetricKey(iface string) string {
-	return "net:" + iface + ":packets"
+func netPacketsMetricKey(iface, direction string) string {
+	return "net:" + iface + ":packets:" + direction
 }
 
 func cpuMetricKey(part string) string {

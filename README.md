@@ -1,6 +1,6 @@
 # NetQuirk Monitoring Agent (Go)
 
-Lightweight open source system agent that collects local host metrics and pushes them to a `push_metrics` monitor endpoint.
+Lightweight open source system agent that collects local host metrics and pushes them to an `agent` monitor endpoint.
 
 ## Metrics Sent
 
@@ -90,8 +90,7 @@ Print binary version:
 ```bash
 ./mon-agent \
   -id "<monitor_uuid>" \
-  -interval 60 \
-  -disk-paths "/,/tmp,/var"
+  -interval 60
 ```
 
 ## Configuration
@@ -102,7 +101,7 @@ Flags (or env vars):
 - `NQ_PUSH_BASE_URL` optional base for `-id` (default `https://push.netquirk.com`)
 - `-interval` (`NQ_INTERVAL_SECONDS`) default `60`
 - `-timeout` (`NQ_TIMEOUT_SECONDS`) default `10`
-- `-disk-paths` (`NQ_DISK_PATHS`) default `"/,/tmp"`
+- `-disk-paths` (`NQ_DISK_PATHS`) optional. If omitted, disk paths are auto-discovered.
 - `-location` (`NQ_LOCATION`) default `"agent"` (sent in `x-monitor-location`)
 - `-oneshot` (`NQ_ONESHOT`) run once and exit
 - `-cpu` (`NQ_INCLUDE_CPU`) default `true`

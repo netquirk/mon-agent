@@ -60,6 +60,10 @@ func discoverDiskTargets(paths []string, hasBtrfsBinary bool) []diskTarget {
 	return targets
 }
 
+func autoDiscoverDiskPaths() []string {
+	return []string{"/"}
+}
+
 func readInodeUsagePercent(target diskTarget, btrfsBinary string) (float64, error) {
 	return 0, fmt.Errorf("inode usage collection is not implemented on this platform")
 }
@@ -84,4 +88,3 @@ func diskRatesForTarget(
 func readLVMThinUsage() (map[string]uint64, error) {
 	return nil, fmt.Errorf("lvm thin metrics are not implemented on this platform")
 }
-

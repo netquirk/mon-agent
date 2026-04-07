@@ -46,16 +46,19 @@ func TestInodeMetricKey(t *testing.T) {
 }
 
 func TestDiskIOKey(t *testing.T) {
-	tests := map[string][2]string{
-		"/":    {"iops:/", "throughput:/"},
-		"/tmp": {"iops:/tmp", "throughput:/tmp"},
+	tests := map[string][3]string{
+		"/":    {"iops:/", "throughput:/:rx", "throughput:/:tx"},
+		"/tmp": {"iops:/tmp", "throughput:/tmp:rx", "throughput:/tmp:tx"},
 	}
 	for in, want := range tests {
 		if got := iopsMetricKey(in); got != want[0] {
 			t.Fatalf("iopsMetricKey(%q)=%q want=%q", in, got, want[0])
 		}
-		if got := throughputMetricKey(in); got != want[1] {
-			t.Fatalf("throughputMetricKey(%q)=%q want=%q", in, got, want[1])
+		if got := throughputMetricKey(in, "rx"); got != want[1] {
+			t.Fatalf("throughputMetricKey(%q,\"rx\")=%q want=%q", in, got, want[1])
+		}
+		if got := throughputMetricKey(in, "tx"); got != want[2] {
+			t.Fatalf("throughputMetricKey(%q,\"tx\")=%q want=%q", in, got, want[2])
 		}
 	}
 }
@@ -70,10 +73,16 @@ func TestLVMMetricKey(t *testing.T) {
 }
 
 func TestNetMetricKeys(t *testing.T) {
-	if got := netBytesMetricKey("eth0"); got != "net:eth0:bytes" {
+	if got := netBytesMetricKey("eth0", "rx"); got != "net:eth0:bytes:rx" {
 		t.Fatalf("unexpected bytes key: %s", got)
 	}
-	if got := netPacketsMetricKey("eth0"); got != "net:eth0:packets" {
+	if got := netBytesMetricKey("eth0", "tx"); got != "net:eth0:bytes:tx" {
+		t.Fatalf("unexpected bytes key: %s", got)
+	}
+	if got := netPacketsMetricKey("eth0", "rx"); got != "net:eth0:packets:rx" {
+		t.Fatalf("unexpected packets key: %s", got)
+	}
+	if got := netPacketsMetricKey("eth0", "tx"); got != "net:eth0:packets:tx" {
 		t.Fatalf("unexpected packets key: %s", got)
 	}
 }

@@ -226,6 +226,92 @@ func discoverDiskTargets(paths []string, hasBtrfsBinary bool) []diskTarget {
 	return targets
 }
 
+func autoDiscoverDiskPaths() []string {
+	mounts := readMountInfo()
+	if len(mounts) == 0 {
+		return []string{"/"}
+	}
+
+	ignoreFSTypes := map[string]struct{}{
+		"proc":        {},
+		"sysfs":       {},
+		"tmpfs":       {},
+		"devtmpfs":    {},
+		"devpts":      {},
+		"cgroup":      {},
+		"cgroup2":     {},
+		"mqueue":      {},
+		"hugetlbfs":   {},
+		"pstore":      {},
+		"securityfs":  {},
+		"tracefs":     {},
+		"configfs":    {},
+		"autofs":      {},
+		"overlay":     {},
+		"squashfs":    {},
+		"nsfs":        {},
+		"rpc_pipefs":  {},
+		"fusectl":     {},
+		"binfmt_misc": {},
+		"debugfs":     {},
+		"selinuxfs":   {},
+		"ramfs":       {},
+		"efivarfs":    {},
+	}
+
+	skipPrefix := []string{
+		"/proc",
+		"/sys",
+		"/dev",
+		"/run",
+		"/snap",
+		"/var/lib/docker",
+		"/var/lib/containers",
+	}
+
+	seen := make(map[string]struct{})
+	paths := make([]string, 0, len(mounts))
+	for _, m := range mounts {
+		p := strings.TrimSpace(m.mountPoint)
+		if p == "" || !strings.HasPrefix(p, "/") {
+			continue
+		}
+		if _, skip := ignoreFSTypes[m.fsType]; skip && p != "/tmp" {
+			continue
+		}
+		skip := false
+		for _, prefix := range skipPrefix {
+			if p == prefix || strings.HasPrefix(p, prefix+"/") {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+		if _, ok := seen[p]; ok {
+			continue
+		}
+		seen[p] = struct{}{}
+		paths = append(paths, p)
+	}
+
+	if _, ok := seen["/"]; !ok {
+		paths = append(paths, "/")
+	}
+
+	sort.Slice(paths, func(i, j int) bool {
+		if paths[i] == "/" {
+			return true
+		}
+		if paths[j] == "/" {
+			return false
+		}
+		return paths[i] < paths[j]
+	})
+	return paths
+}
+
 func readInodeUsagePercent(target diskTarget, btrfsBinary string) (float64, error) {
 	if target.useBtrfsInodeCommand {
 		percent, err := readBtrfsInodeUsagePercent(target.path, btrfsBinary)
@@ -378,8 +464,10 @@ type mountInfo struct {
 }
 
 type netCounters struct {
-	bytes   uint64
-	packets uint64
+	rxBytes   uint64
+	txBytes   uint64
+	rxPackets uint64
+	txPackets uint64
 }
 
 type diskCounters struct {
@@ -508,8 +596,10 @@ func readNetSnapshot() (netSnapshot, error) {
 		}
 
 		out[iface] = netCounters{
-			bytes:   rxBytes + txBytes,
-			packets: rxPackets + txPackets,
+			rxBytes:   rxBytes,
+			txBytes:   txBytes,
+			rxPackets: rxPackets,
+			txPackets: txPackets,
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -569,34 +659,33 @@ func diskRatesForTarget(
 	current diskSnapshot,
 	target diskTarget,
 	elapsedSeconds float64,
-) (uint64, uint64, error) {
+) (uint64, uint64, uint64, error) {
 	if elapsedSeconds <= 0 {
-		return 0, 0, errors.New("elapsed time must be > 0")
+		return 0, 0, 0, errors.New("elapsed time must be > 0")
 	}
 	if strings.TrimSpace(target.majorMinor) == "" {
-		return 0, 0, errors.New("target has no major:minor mapping")
+		return 0, 0, 0, errors.New("target has no major:minor mapping")
 	}
 
 	prevCounters, ok := prev[target.majorMinor]
 	if !ok {
-		return 0, 0, errors.New("previous disk counters not found")
+		return 0, 0, 0, errors.New("previous disk counters not found")
 	}
 	currentCounters, ok := current[target.majorMinor]
 	if !ok {
-		return 0, 0, errors.New("current disk counters not found")
+		return 0, 0, 0, errors.New("current disk counters not found")
 	}
 
 	ioOpsDelta := counterDelta(currentCounters.readIOs, prevCounters.readIOs) +
 		counterDelta(currentCounters.writeIOs, prevCounters.writeIOs)
-	sectorsDelta := counterDelta(currentCounters.readSectors, prevCounters.readSectors) +
-		counterDelta(currentCounters.writeSectors, prevCounters.writeSectors)
-
 	const sectorSizeBytes = 512
-	bytesDelta := sectorsDelta * sectorSizeBytes
+	readBytesDelta := counterDelta(currentCounters.readSectors, prevCounters.readSectors) * sectorSizeBytes
+	writeBytesDelta := counterDelta(currentCounters.writeSectors, prevCounters.writeSectors) * sectorSizeBytes
 
 	iops := uint64((float64(ioOpsDelta) / elapsedSeconds) + 0.5)
-	throughput := uint64((float64(bytesDelta) / elapsedSeconds) + 0.5)
-	return iops, throughput, nil
+	throughputRead := uint64((float64(readBytesDelta) / elapsedSeconds) + 0.5)
+	throughputWrite := uint64((float64(writeBytesDelta) / elapsedSeconds) + 0.5)
+	return iops, throughputRead, throughputWrite, nil
 }
 
 func readLVMThinUsage() (map[string]uint64, error) {
