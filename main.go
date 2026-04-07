@@ -695,11 +695,17 @@ func flushQueue(ctx context.Context, client *http.Client, cfg config) error {
 				continue
 			}
 
-			payload.IngestMode = "live"
-			if payload.Timestamp > 0 {
-				ts := time.Unix(payload.Timestamp, 0).UTC()
-				if now.Sub(ts) > (cfg.interval + cfg.interval) {
-					payload.IngestMode = "backfill"
+			mode := strings.ToLower(strings.TrimSpace(payload.IngestMode))
+			switch mode {
+			case "live", "backfill":
+				payload.IngestMode = mode
+			default:
+				payload.IngestMode = "live"
+				if payload.Timestamp > 0 {
+					ts := time.Unix(payload.Timestamp, 0).UTC()
+					if now.Sub(ts) > (cfg.interval + cfg.interval) {
+						payload.IngestMode = "backfill"
+					}
 				}
 			}
 
