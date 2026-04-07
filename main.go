@@ -151,6 +151,7 @@ func main() {
 	defer stop()
 
 	runOnce := func() error {
+		runStartedAt := time.Now()
 		metrics := make(map[string]uint64)
 
 		if cfg.includeCPU {
@@ -248,6 +249,12 @@ func main() {
 		if len(metrics) == 0 {
 			return errors.New("no metrics collected")
 		}
+
+		processingMs := time.Since(runStartedAt).Milliseconds()
+		if processingMs < 1 {
+			processingMs = 1
+		}
+		metrics["time_ms"] = uint64(processingMs)
 
 		payload := pushPayload{
 			AgentVersion: 1,
