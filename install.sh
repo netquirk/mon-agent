@@ -128,10 +128,19 @@ if [[ -z "${BIN_PATH}" ]]; then
   exit 1
 fi
 
+if command -v systemctl >/dev/null 2>&1; then
+  if systemctl list-unit-files "${SERVICE_NAME}.service" >/dev/null 2>&1; then
+    if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
+      echo "Stopping ${SERVICE_NAME}.service before binary upgrade"
+      systemctl stop "${SERVICE_NAME}.service"
+    fi
+  fi
+fi
+
 install -m 0755 "${BIN_PATH}" /usr/local/bin/mon-agent
 
 echo "Installing and enabling ${SERVICE_NAME}.service"
-/usr/local/bin/mon-agent \
+"${BIN_PATH}" \
   -install \
   -id "${MONITOR_ID}" \
   -interval "${INTERVAL_SECONDS}" \

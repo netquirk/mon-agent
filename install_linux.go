@@ -30,6 +30,13 @@ func installSystemdService(cfg config) error {
 		return fmt.Errorf("resolve executable symlink: %w", err)
 	}
 
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return fmt.Errorf("systemctl not found: %w", err)
+	}
+
+	// Best effort: stop existing service before replacing binary.
+	_ = runCommand("systemctl", "stop", cfg.serviceName+".service")
+
 	if err := copyFile(exe, cfg.binaryPath, 0o755); err != nil {
 		return fmt.Errorf("install binary: %w", err)
 	}
@@ -45,10 +52,6 @@ func installSystemdService(cfg config) error {
 	unit = strings.ReplaceAll(unit, "{{SERVICE_NAME}}", cfg.serviceName)
 	if err := writeFileWithPerms(cfg.servicePath, []byte(unit), 0o644); err != nil {
 		return fmt.Errorf("write systemd unit: %w", err)
-	}
-
-	if _, err := exec.LookPath("systemctl"); err != nil {
-		return fmt.Errorf("systemctl not found: %w", err)
 	}
 
 	if err := runCommand("systemctl", "daemon-reload"); err != nil {
@@ -96,7 +99,27 @@ func copyFile(src, dst string, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	if err := writeFileWithPerms(dst, data, mode); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(dst), ".mon-agent-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(mode); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, dst); err != nil {
 		return err
 	}
 	return nil
