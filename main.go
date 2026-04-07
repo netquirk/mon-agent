@@ -816,9 +816,6 @@ func percentToScaled100Uint64(v float64) uint64 {
 	if v <= 0 {
 		return 0
 	}
-	if v >= 100 {
-		return 10000
-	}
 	return uint64((v * 100.0) + 0.5)
 }
 

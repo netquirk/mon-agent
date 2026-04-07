@@ -175,7 +175,8 @@ func TestPercentToScaled100Uint64(t *testing.T) {
 		{in: 1.23, want: 123},
 		{in: 49.995, want: 5000},
 		{in: 100, want: 10000},
-		{in: 101.5, want: 10000},
+		{in: 101.5, want: 10150},
+		{in: 250.75, want: 25075},
 	}
 	for _, tt := range tests {
 		got := percentToScaled100Uint64(tt.in)
