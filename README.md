@@ -2,6 +2,10 @@
 
 Lightweight open source system agent that collects local host metrics and pushes them to an `agent` monitor endpoint.
 
+## Security Policy
+
+Automatic updates are intentionally disabled for security reasons. See [SECURITY_POLICY.md](SECURITY_POLICY.md).
+
 ## Metrics Sent
 
 - `cpu:user` - CPU user percent
