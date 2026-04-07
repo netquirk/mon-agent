@@ -16,6 +16,25 @@ import (
 	"syscall"
 )
 
+func readLoadAverageScaled() (uint64, error) {
+	data, err := os.ReadFile("/proc/loadavg")
+	if err != nil {
+		return 0, err
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) < 1 {
+		return 0, errors.New("unexpected /proc/loadavg format")
+	}
+	val, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse loadavg: %w", err)
+	}
+	if val < 0 {
+		val = 0
+	}
+	return uint64((val * 100.0) + 0.5), nil
+}
+
 func readCPUSnapshot() (cpuSnapshot, error) {
 	f, err := os.Open("/proc/stat")
 	if err != nil {

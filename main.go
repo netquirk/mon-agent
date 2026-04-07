@@ -198,6 +198,11 @@ func main() {
 			metrics[ramMetricKey("shared")] = percentToUint64(ram.shared)
 			metrics[ramMetricKey("buff")] = percentToUint64(ram.buff)
 		}
+		if loadAvgScaled, err := readLoadAverageScaled(); err == nil {
+			metrics["loadavg"] = loadAvgScaled
+		} else {
+			log.Printf("loadavg metric failed: %v", err)
+		}
 		if cfg.includeNet {
 			currentNet, err := readNetSnapshot()
 			if err != nil {

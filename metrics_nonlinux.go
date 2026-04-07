@@ -45,6 +45,10 @@ func readRAMBreakdownPercent() (ramBreakdown, error) {
 	}, nil
 }
 
+func readLoadAverageScaled() (uint64, error) {
+	return 0, fmt.Errorf("loadavg collection is not implemented on this platform")
+}
+
 func readDiskUsedPercent(path string) (float64, error) {
 	return 0, fmt.Errorf("disk usage collection is not implemented on this platform")
 }
