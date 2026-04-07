@@ -163,6 +163,28 @@ func TestPercentToUint64(t *testing.T) {
 	}
 }
 
+func TestPercentToScaled100Uint64(t *testing.T) {
+	tests := []struct {
+		in   float64
+		want uint64
+	}{
+		{in: -1, want: 0},
+		{in: 0, want: 0},
+		{in: 0.001, want: 0},
+		{in: 0.01, want: 1},
+		{in: 1.23, want: 123},
+		{in: 49.995, want: 5000},
+		{in: 100, want: 10000},
+		{in: 101.5, want: 10000},
+	}
+	for _, tt := range tests {
+		got := percentToScaled100Uint64(tt.in)
+		if got != tt.want {
+			t.Fatalf("percentToScaled100Uint64(%v)=%d want=%d", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestPushPayloadMetricsMarshalAsIntegers(t *testing.T) {
 	payload := pushPayload{
 		AgentVersion: 1,

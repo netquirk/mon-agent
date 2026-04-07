@@ -181,10 +181,10 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("compute cpu breakdown: %w", err)
 			}
-			metrics[cpuMetricKey("user")] = percentToUint64(cpu.user)
-			metrics[cpuMetricKey("system")] = percentToUint64(cpu.system)
-			metrics[cpuMetricKey("iowait")] = percentToUint64(cpu.iowait)
-			metrics[cpuMetricKey("steal")] = percentToUint64(cpu.steal)
+			metrics[cpuMetricKey("user")] = percentToScaled100Uint64(cpu.user)
+			metrics[cpuMetricKey("system")] = percentToScaled100Uint64(cpu.system)
+			metrics[cpuMetricKey("iowait")] = percentToScaled100Uint64(cpu.iowait)
+			metrics[cpuMetricKey("steal")] = percentToScaled100Uint64(cpu.steal)
 			prevCPU = current
 		}
 
@@ -193,10 +193,10 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("read ram usage: %w", err)
 			}
-			metrics[ramMetricKey("used")] = percentToUint64(ram.used)
-			metrics[ramMetricKey("free")] = percentToUint64(ram.free)
-			metrics[ramMetricKey("shared")] = percentToUint64(ram.shared)
-			metrics[ramMetricKey("buff")] = percentToUint64(ram.buff)
+			metrics[ramMetricKey("used")] = percentToScaled100Uint64(ram.used)
+			metrics[ramMetricKey("free")] = percentToScaled100Uint64(ram.free)
+			metrics[ramMetricKey("shared")] = percentToScaled100Uint64(ram.shared)
+			metrics[ramMetricKey("buff")] = percentToScaled100Uint64(ram.buff)
 		}
 		if loadAvgScaled, err := readLoadAverageScaled(); err == nil {
 			metrics["loadavg"] = loadAvgScaled
@@ -805,4 +805,14 @@ func percentToUint64(v float64) uint64 {
 		return 100
 	}
 	return uint64(v + 0.5)
+}
+
+func percentToScaled100Uint64(v float64) uint64 {
+	if v <= 0 {
+		return 0
+	}
+	if v >= 100 {
+		return 10000
+	}
+	return uint64((v * 100.0) + 0.5)
 }
