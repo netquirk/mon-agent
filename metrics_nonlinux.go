@@ -14,8 +14,10 @@ type ramBreakdown struct {
 }
 
 type netCounters struct {
-	bytes   uint64
-	packets uint64
+	rxBytes   uint64
+	txBytes   uint64
+	rxPackets uint64
+	txPackets uint64
 }
 
 type diskCounters struct {
@@ -81,8 +83,8 @@ func diskRatesForTarget(
 	current diskSnapshot,
 	target diskTarget,
 	elapsedSeconds float64,
-) (uint64, uint64, error) {
-	return 0, 0, fmt.Errorf("disk IOPS/throughput collection is not implemented on this platform")
+) (uint64, uint64, uint64, error) {
+	return 0, 0, 0, fmt.Errorf("disk IOPS/throughput collection is not implemented on this platform")
 }
 
 func readLVMThinUsage() (map[string]uint64, error) {
