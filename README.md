@@ -10,23 +10,10 @@ Automatic updates are intentionally disabled for security reasons. See [SECURITY
 
 - `pack4_cpu` - Packed CPU lanes `[user, system, iowait, steal]` (each lane is scaled percent x100)
 - `pack4_ram` - Packed RAM lanes `[used, free, shared, buff/cache]` (each lane is scaled percent x100)
-- `disk:{path}` - Disk used percent for each configured mount path
-- `inode:{path}` - Inode used percent for each configured mount path
-- `iops:{path}` - Disk I/O operations per second for each configured mount path
-- `throughput:{path}` - Disk throughput (bytes/sec) for each configured mount path
-- `pack2_lvm_{vg}/{lv}` - Packed LVM thin usage lanes `[data_percent, meta_percent]` (lane3/4 reserved)
+- `pack2_disk_{path}` - Packed disk/inode usage lanes `[disk_used_percent, inode_used_percent]`
+- `vec_disk_{path}` - 4-lane disk IO vector `[read_bps, write_bps, read_iops, write_iops]`
+- `pack2_lvm_{vg}/{lv}` - Packed LVM thin usage lanes `[data_percent, meta_percent]`
 - `vec_net_{iface}` - 4-lane net vector `[rx_bytes, tx_bytes, rx_packets, tx_packets]`
-
-Examples:
-
-- `disk:/`
-- `disk:/tmp`
-- `inode:/`
-- `inode:/tmp`
-- `iops:/`
-- `throughput:/tmp`
-- `pack2_lvm_vg0/thinpool`
-- `vec_net_eth0`
 
 ## Payload Format
 
@@ -39,12 +26,9 @@ The agent sends:
   "metrics": {
     "pack4_cpu": 1125917086976090,
     "pack4_ram": 13258617121480734,
-    "disk:/": 44,
-    "disk:/tmp": 8,
-    "inode:/": 71,
-    "inode:/tmp": 3,
-    "iops:/": 23,
-    "throughput:/": 196608,
+    "pack2_disk_/": [44, 71],
+    "pack2_disk_/tmp": [8, 3],
+    "vec_disk_/": [98304, 98304, 12, 11],
     "vec_net_eth0": [12488, 9312, 83, 62]
   }
 }

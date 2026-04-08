@@ -45,20 +45,14 @@ func TestInodeMetricKey(t *testing.T) {
 	}
 }
 
-func TestDiskIOKey(t *testing.T) {
-	tests := map[string][3]string{
-		"/":    {"iops:/", "throughput:/:rx", "throughput:/:tx"},
-		"/tmp": {"iops:/tmp", "throughput:/tmp:rx", "throughput:/tmp:tx"},
+func TestDiskIOVecKey(t *testing.T) {
+	tests := map[string]string{
+		"/":    "vec_disk_/",
+		"/tmp": "vec_disk_/tmp",
 	}
 	for in, want := range tests {
-		if got := iopsMetricKey(in); got != want[0] {
-			t.Fatalf("iopsMetricKey(%q)=%q want=%q", in, got, want[0])
-		}
-		if got := throughputMetricKey(in, "rx"); got != want[1] {
-			t.Fatalf("throughputMetricKey(%q,\"rx\")=%q want=%q", in, got, want[1])
-		}
-		if got := throughputMetricKey(in, "tx"); got != want[2] {
-			t.Fatalf("throughputMetricKey(%q,\"tx\")=%q want=%q", in, got, want[2])
+		if got := diskVecMetricKey(in); got != want {
+			t.Fatalf("diskVecMetricKey(%q)=%q want=%q", in, got, want)
 		}
 	}
 }
@@ -66,6 +60,15 @@ func TestDiskIOKey(t *testing.T) {
 func TestLVMMetricKey(t *testing.T) {
 	if got := lvmPackedMetricKey("vg0", "thinpool"); got != "pack2_lvm_vg0/thinpool" {
 		t.Fatalf("unexpected lvm packed key: %s", got)
+	}
+}
+
+func TestDiskInodePackedMetricKey(t *testing.T) {
+	if got := diskInodePackedMetricKey("/"); got != "pack2_disk_/" {
+		t.Fatalf("unexpected disk/inode pack2 key: %s", got)
+	}
+	if got := diskInodePackedMetricKey("/tmp"); got != "pack2_disk_/tmp" {
+		t.Fatalf("unexpected disk/inode pack2 key: %s", got)
 	}
 }
 
@@ -187,6 +190,22 @@ func TestPackU16x4Clamps(t *testing.T) {
 	want := uint64(0xffff) | (uint64(1) << 16) | (uint64(2) << 32) | (uint64(3) << 48)
 	if got != want {
 		t.Fatalf("packU16x4 clamp mismatch got=%d want=%d", got, want)
+	}
+}
+
+func TestPackU32x2(t *testing.T) {
+	got := packU32x2(1000, 2000)
+	want := uint64(1000) | (uint64(2000) << 32)
+	if got != want {
+		t.Fatalf("packU32x2 mismatch got=%d want=%d", got, want)
+	}
+}
+
+func TestPackU32x2Clamps(t *testing.T) {
+	got := packU32x2(^uint64(0), 1)
+	want := uint64(0xffff_ffff) | (uint64(1) << 32)
+	if got != want {
+		t.Fatalf("packU32x2 clamp mismatch got=%d want=%d", got, want)
 	}
 }
 

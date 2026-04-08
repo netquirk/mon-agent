@@ -254,14 +254,16 @@ func main() {
 				log.Printf("disk metric failed for %q: %v", target.path, err)
 				continue
 			}
-			addUint64Metric(metrics, diskMetricKey(target.path), percentToUint64(usedPercent))
 
 			inodePercent, err := readInodeUsagePercent(target, btrfsBinary)
 			if err != nil {
 				log.Printf("inode metric failed for %q: %v", target.path, err)
 				continue
 			}
-			addUint64Metric(metrics, inodeMetricKey(target.path), percentToUint64(inodePercent))
+			addUint64ArrayMetric(metrics, diskInodePackedMetricKey(target.path), []uint64{
+				percentToUint64(usedPercent),
+				percentToUint64(inodePercent),
+			})
 		}
 		if prevDisk != nil {
 			currentDisk, err := readDiskSnapshot()
@@ -272,13 +274,16 @@ func main() {
 				elapsed := now.Sub(prevDiskAt).Seconds()
 				if elapsed >= 1 {
 					for _, target := range diskTargets {
-						iops, throughputRead, throughputWrite, ioErr := diskRatesForTarget(prevDisk, currentDisk, target, elapsed)
+						readIOPS, writeIOPS, throughputRead, throughputWrite, ioErr := diskRatesForTarget(prevDisk, currentDisk, target, elapsed)
 						if ioErr != nil {
 							continue
 						}
-						addUint64Metric(metrics, iopsMetricKey(target.path), iops)
-						addUint64Metric(metrics, throughputMetricKey(target.path, "rx"), throughputRead)
-						addUint64Metric(metrics, throughputMetricKey(target.path, "tx"), throughputWrite)
+						addUint64ArrayMetric(metrics, diskVecMetricKey(target.path), []uint64{
+							throughputRead,
+							throughputWrite,
+							readIOPS,
+							writeIOPS,
+						})
 					}
 				}
 				prevDisk = currentDisk
@@ -498,16 +503,16 @@ func inodeMetricKey(path string) string {
 	return "inode:" + path
 }
 
-func iopsMetricKey(path string) string {
-	return "iops:" + path
-}
-
-func throughputMetricKey(path, direction string) string {
-	return "throughput:" + path + ":" + direction
+func diskVecMetricKey(path string) string {
+	return "vec_disk_" + path
 }
 
 func lvmPackedMetricKey(vg, lv string) string {
 	return "pack2_lvm_" + vg + "/" + lv
+}
+
+func diskInodePackedMetricKey(path string) string {
+	return "pack2_disk_" + path
 }
 
 func netVecMetricKey(iface string) string {
@@ -956,6 +961,18 @@ func packU16x4(a, b, c, d uint64) uint64 {
 	c = clamp(c)
 	d = clamp(d)
 	return a | (b << 16) | (c << 32) | (d << 48)
+}
+
+func packU32x2(a, b uint64) uint64 {
+	clamp := func(v uint64) uint64 {
+		if v > 0xffff_ffff {
+			return 0xffff_ffff
+		}
+		return v
+	}
+	a = clamp(a)
+	b = clamp(b)
+	return a | (b << 32)
 }
 
 func encodeSemverVersion(raw string) (uint64, error) {

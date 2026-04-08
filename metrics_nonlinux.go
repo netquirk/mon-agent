@@ -87,8 +87,8 @@ func diskRatesForTarget(
 	current diskSnapshot,
 	target diskTarget,
 	elapsedSeconds float64,
-) (uint64, uint64, uint64, error) {
-	return 0, 0, 0, fmt.Errorf("disk IOPS/throughput collection is not implemented on this platform")
+) (uint64, uint64, uint64, uint64, error) {
+	return 0, 0, 0, 0, fmt.Errorf("disk IOPS/throughput collection is not implemented on this platform")
 }
 
 func readLVMThinUsage() (map[string]uint64, error) {

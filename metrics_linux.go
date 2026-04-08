@@ -721,33 +721,34 @@ func diskRatesForTarget(
 	current diskSnapshot,
 	target diskTarget,
 	elapsedSeconds float64,
-) (uint64, uint64, uint64, error) {
+) (uint64, uint64, uint64, uint64, error) {
 	if elapsedSeconds <= 0 {
-		return 0, 0, 0, errors.New("elapsed time must be > 0")
+		return 0, 0, 0, 0, errors.New("elapsed time must be > 0")
 	}
 	if strings.TrimSpace(target.majorMinor) == "" {
-		return 0, 0, 0, errors.New("target has no major:minor mapping")
+		return 0, 0, 0, 0, errors.New("target has no major:minor mapping")
 	}
 
 	prevCounters, ok := prev[target.majorMinor]
 	if !ok {
-		return 0, 0, 0, errors.New("previous disk counters not found")
+		return 0, 0, 0, 0, errors.New("previous disk counters not found")
 	}
 	currentCounters, ok := current[target.majorMinor]
 	if !ok {
-		return 0, 0, 0, errors.New("current disk counters not found")
+		return 0, 0, 0, 0, errors.New("current disk counters not found")
 	}
 
-	ioOpsDelta := counterDelta(currentCounters.readIOs, prevCounters.readIOs) +
-		counterDelta(currentCounters.writeIOs, prevCounters.writeIOs)
+	readIOPSDelta := counterDelta(currentCounters.readIOs, prevCounters.readIOs)
+	writeIOPSDelta := counterDelta(currentCounters.writeIOs, prevCounters.writeIOs)
 	const sectorSizeBytes = 512
 	readBytesDelta := counterDelta(currentCounters.readSectors, prevCounters.readSectors) * sectorSizeBytes
 	writeBytesDelta := counterDelta(currentCounters.writeSectors, prevCounters.writeSectors) * sectorSizeBytes
 
-	iops := uint64((float64(ioOpsDelta) / elapsedSeconds) + 0.5)
+	readIOPS := uint64((float64(readIOPSDelta) / elapsedSeconds) + 0.5)
+	writeIOPS := uint64((float64(writeIOPSDelta) / elapsedSeconds) + 0.5)
 	throughputRead := uint64((float64(readBytesDelta) / elapsedSeconds) + 0.5)
 	throughputWrite := uint64((float64(writeBytesDelta) / elapsedSeconds) + 0.5)
-	return iops, throughputRead, throughputWrite, nil
+	return readIOPS, writeIOPS, throughputRead, throughputWrite, nil
 }
 
 func readLVMThinUsage() (map[string]uint64, error) {
@@ -800,7 +801,7 @@ func readLVMThinUsage() (map[string]uint64, error) {
 			dataPct, dataOK := parseLVMPercentToken(row.DataPercent)
 			metaPct, metaOK := parseLVMPercentToken(row.MetadataPercent)
 			if dataOK || metaOK {
-				out[lvmPackedMetricKey(vg, lv)] = packU16x4(dataPct, metaPct, 0, 0)
+				out[lvmPackedMetricKey(vg, lv)] = packU32x2(dataPct, metaPct)
 			}
 		}
 	}
