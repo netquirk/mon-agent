@@ -8,13 +8,13 @@ Automatic updates are intentionally disabled for security reasons. See [SECURITY
 
 ## Metrics Sent
 
-- `pack4_cpu_v1` - Packed CPU lanes `[user, system, iowait, steal]` (each lane is scaled percent x100)
-- `pack4_ram_v1` - Packed RAM lanes `[used, free, shared, buff/cache]` (each lane is scaled percent x100)
+- `pack4_cpu` - Packed CPU lanes `[user, system, iowait, steal]` (each lane is scaled percent x100)
+- `pack4_ram` - Packed RAM lanes `[used, free, shared, buff/cache]` (each lane is scaled percent x100)
 - `disk:{path}` - Disk used percent for each configured mount path
 - `inode:{path}` - Inode used percent for each configured mount path
 - `iops:{path}` - Disk I/O operations per second for each configured mount path
 - `throughput:{path}` - Disk throughput (bytes/sec) for each configured mount path
-- `pack2_lvm_v1_{vg}/{lv}` - Packed LVM thin usage lanes `[data_percent, meta_percent]` (lane3/4 reserved)
+- `pack2_lvm_{vg}/{lv}` - Packed LVM thin usage lanes `[data_percent, meta_percent]` (lane3/4 reserved)
 - `vec_net_{iface}` - 4-lane net vector `[rx_bytes, tx_bytes, rx_packets, tx_packets]`
 
 Examples:
@@ -25,7 +25,7 @@ Examples:
 - `inode:/tmp`
 - `iops:/`
 - `throughput:/tmp`
-- `pack2_lvm_v1_vg0/thinpool`
+- `pack2_lvm_vg0/thinpool`
 - `vec_net_eth0`
 
 ## Payload Format
@@ -37,8 +37,8 @@ The agent sends:
   "agent_version": 1,
   "ts": 1775340000,
   "metrics": {
-    "pack4_cpu_v1": 1125917086976090,
-    "pack4_ram_v1": 13258617121480734,
+    "pack4_cpu": 1125917086976090,
+    "pack4_ram": 13258617121480734,
     "disk:/": 44,
     "disk:/tmp": 8,
     "inode:/": 71,

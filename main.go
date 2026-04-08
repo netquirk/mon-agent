@@ -94,8 +94,8 @@ type pushResponse struct {
 var version = "dev"
 
 const (
-	packedCPUKey = "pack4_cpu_v1"
-	packedRAMKey = "pack4_ram_v1"
+	packedCPUKey = "pack4_cpu"
+	packedRAMKey = "pack4_ram"
 )
 
 func main() {
@@ -507,7 +507,7 @@ func throughputMetricKey(path, direction string) string {
 }
 
 func lvmPackedMetricKey(vg, lv string) string {
-	return "pack2_lvm_v1_" + vg + "/" + lv
+	return "pack2_lvm_" + vg + "/" + lv
 }
 
 func netVecMetricKey(iface string) string {

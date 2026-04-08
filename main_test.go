@@ -64,7 +64,7 @@ func TestDiskIOKey(t *testing.T) {
 }
 
 func TestLVMMetricKey(t *testing.T) {
-	if got := lvmPackedMetricKey("vg0", "thinpool"); got != "pack2_lvm_v1_vg0/thinpool" {
+	if got := lvmPackedMetricKey("vg0", "thinpool"); got != "pack2_lvm_vg0/thinpool" {
 		t.Fatalf("unexpected lvm packed key: %s", got)
 	}
 }
