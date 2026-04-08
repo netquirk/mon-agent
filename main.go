@@ -93,6 +93,11 @@ type pushResponse struct {
 
 var version = "dev"
 
+const (
+	packedCPUKey = "pack_cpu_v1"
+	packedRAMKey = "pack_ram_v1"
+)
+
 func main() {
 	cfg, err := loadConfig()
 	if err != nil {
@@ -197,10 +202,12 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("compute cpu breakdown: %w", err)
 			}
-			metrics[cpuMetricKey("user")] = percentToScaled100Uint64(cpu.user)
-			metrics[cpuMetricKey("system")] = percentToScaled100Uint64(cpu.system)
-			metrics[cpuMetricKey("iowait")] = percentToScaled100Uint64(cpu.iowait)
-			metrics[cpuMetricKey("steal")] = percentToScaled100Uint64(cpu.steal)
+			metrics[packedCPUKey] = packU16x4(
+				percentToScaled100Uint64(cpu.user),
+				percentToScaled100Uint64(cpu.system),
+				percentToScaled100Uint64(cpu.iowait),
+				percentToScaled100Uint64(cpu.steal),
+			)
 			prevCPU = current
 		}
 
@@ -209,10 +216,12 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("read ram usage: %w", err)
 			}
-			metrics[ramMetricKey("used")] = percentToScaled100Uint64(ram.used)
-			metrics[ramMetricKey("free")] = percentToScaled100Uint64(ram.free)
-			metrics[ramMetricKey("shared")] = percentToScaled100Uint64(ram.shared)
-			metrics[ramMetricKey("buff")] = percentToScaled100Uint64(ram.buff)
+			metrics[packedRAMKey] = packU16x4(
+				percentToScaled100Uint64(ram.used),
+				percentToScaled100Uint64(ram.free),
+				percentToScaled100Uint64(ram.shared),
+				percentToScaled100Uint64(ram.buff),
+			)
 		}
 		if loadAvgScaled, err := readLoadAverageScaled(); err == nil {
 			metrics["loadavg"] = loadAvgScaled
@@ -927,6 +936,20 @@ func percentToScaled100Uint64(v float64) uint64 {
 		return 0
 	}
 	return uint64((v * 100.0) + 0.5)
+}
+
+func packU16x4(a, b, c, d uint64) uint64 {
+	clamp := func(v uint64) uint64 {
+		if v > 0xffff {
+			return 0xffff
+		}
+		return v
+	}
+	a = clamp(a)
+	b = clamp(b)
+	c = clamp(c)
+	d = clamp(d)
+	return a | (b << 16) | (c << 32) | (d << 48)
 }
 
 func encodeSemverVersion(raw string) (uint64, error) {

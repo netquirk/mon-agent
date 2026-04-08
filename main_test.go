@@ -186,6 +186,22 @@ func TestPercentToScaled100Uint64(t *testing.T) {
 	}
 }
 
+func TestPackU16x4(t *testing.T) {
+	got := packU16x4(100, 200, 300, 400)
+	want := uint64(100) | (uint64(200) << 16) | (uint64(300) << 32) | (uint64(400) << 48)
+	if got != want {
+		t.Fatalf("packU16x4 mismatch got=%d want=%d", got, want)
+	}
+}
+
+func TestPackU16x4Clamps(t *testing.T) {
+	got := packU16x4(70000, 1, 2, 3)
+	want := uint64(0xffff) | (uint64(1) << 16) | (uint64(2) << 32) | (uint64(3) << 48)
+	if got != want {
+		t.Fatalf("packU16x4 clamp mismatch got=%d want=%d", got, want)
+	}
+}
+
 func TestPushPayloadMetricsMarshalAsIntegers(t *testing.T) {
 	payload := pushPayload{
 		AgentVersion: (1 << 42) | 1,

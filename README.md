@@ -8,14 +8,8 @@ Automatic updates are intentionally disabled for security reasons. See [SECURITY
 
 ## Metrics Sent
 
-- `cpu:user` - CPU user percent
-- `cpu:system` - CPU system percent
-- `cpu:iowait` - CPU iowait percent
-- `cpu:steal` - CPU steal percent
-- `ram:used` - RAM used percent
-- `ram:free` - RAM free percent
-- `ram:shared` - RAM shared percent
-- `ram:buff` - RAM buffer percent
+- `pack_cpu_v1` - Packed CPU lanes `[user, system, iowait, steal]` (each lane is scaled percent x100)
+- `pack_ram_v1` - Packed RAM lanes `[used, free, shared, buff/cache]` (each lane is scaled percent x100)
 - `disk:{path}` - Disk used percent for each configured mount path
 - `inode:{path}` - Inode used percent for each configured mount path
 - `iops:{path}` - Disk I/O operations per second for each configured mount path
@@ -47,14 +41,8 @@ The agent sends:
   "agent_version": 1,
   "ts": 1775340000,
   "metrics": {
-    "cpu:user": 12,
-    "cpu:system": 4,
-    "cpu:iowait": 0,
-    "cpu:steal": 0,
-    "ram:used": 64,
-    "ram:free": 36,
-    "ram:shared": 3,
-    "ram:buff": 1,
+    "pack_cpu_v1": 1125917086976090,
+    "pack_ram_v1": 13258617121480734,
     "disk:/": 44,
     "disk:/tmp": 8,
     "inode:/": 71,
@@ -67,7 +55,7 @@ The agent sends:
 }
 ```
 
-All metric values are emitted as `uint64` integers. Percentage metrics (`cpu:*`, `ram:*`, `disk:*`) are rounded to whole percent values (`0-100`).
+All metric values are emitted as `uint64` integers. CPU/RAM lanes are packed into a single `uint64` per group and stored as scaled percent (`percent x100`) per lane.
 
 ## Btrfs Inode Handling
 
