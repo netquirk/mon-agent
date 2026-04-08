@@ -135,8 +135,11 @@ func readRAMBreakdownPercent() (ramBreakdown, error) {
 
 	var totalKB uint64
 	var freeKB uint64
+	var availableKB uint64
 	var sharedKB uint64
-	var buffKB uint64
+	var buffersKB uint64
+	var cachedKB uint64
+	var sreclaimableKB uint64
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -152,6 +155,12 @@ func readRAMBreakdownPercent() (ramBreakdown, error) {
 				return ramBreakdown{}, err
 			}
 		}
+		if strings.HasPrefix(line, "MemAvailable:") {
+			availableKB, err = parseMeminfoValue(line)
+			if err != nil {
+				return ramBreakdown{}, err
+			}
+		}
 		if strings.HasPrefix(line, "Shmem:") {
 			sharedKB, err = parseMeminfoValue(line)
 			if err != nil {
@@ -159,7 +168,19 @@ func readRAMBreakdownPercent() (ramBreakdown, error) {
 			}
 		}
 		if strings.HasPrefix(line, "Buffers:") {
-			buffKB, err = parseMeminfoValue(line)
+			buffersKB, err = parseMeminfoValue(line)
+			if err != nil {
+				return ramBreakdown{}, err
+			}
+		}
+		if strings.HasPrefix(line, "Cached:") {
+			cachedKB, err = parseMeminfoValue(line)
+			if err != nil {
+				return ramBreakdown{}, err
+			}
+		}
+		if strings.HasPrefix(line, "SReclaimable:") {
+			sreclaimableKB, err = parseMeminfoValue(line)
 			if err != nil {
 				return ramBreakdown{}, err
 			}
@@ -174,12 +195,34 @@ func readRAMBreakdownPercent() (ramBreakdown, error) {
 	if freeKB > totalKB {
 		freeKB = totalKB
 	}
-	usedKB := totalKB - freeKB
+
+	// Match Linux `free` semantics more closely:
+	// used ~= MemTotal - MemAvailable
+	// buff/cache ~= Buffers + Cached + SReclaimable - Shmem
+	if availableKB == 0 {
+		availableKB = freeKB + buffersKB + cachedKB + sreclaimableKB
+	}
+	if availableKB > totalKB {
+		availableKB = totalKB
+	}
+
+	usedKB := totalKB - availableKB
+
+	buffCacheKB := buffersKB + cachedKB + sreclaimableKB
+	if buffCacheKB > sharedKB {
+		buffCacheKB -= sharedKB
+	} else {
+		buffCacheKB = 0
+	}
+	if buffCacheKB > totalKB {
+		buffCacheKB = totalKB
+	}
+
 	return ramBreakdown{
 		used:   clampPct((float64(usedKB) / float64(totalKB)) * 100.0),
 		free:   clampPct((float64(freeKB) / float64(totalKB)) * 100.0),
 		shared: clampPct((float64(sharedKB) / float64(totalKB)) * 100.0),
-		buff:   clampPct((float64(buffKB) / float64(totalKB)) * 100.0),
+		buff:   clampPct((float64(buffCacheKB) / float64(totalKB)) * 100.0),
 	}, nil
 }
 
