@@ -8,14 +8,13 @@ Automatic updates are intentionally disabled for security reasons. See [SECURITY
 
 ## Metrics Sent
 
-- `pack_cpu_v1` - Packed CPU lanes `[user, system, iowait, steal]` (each lane is scaled percent x100)
-- `pack_ram_v1` - Packed RAM lanes `[used, free, shared, buff/cache]` (each lane is scaled percent x100)
+- `pack4_cpu_v1` - Packed CPU lanes `[user, system, iowait, steal]` (each lane is scaled percent x100)
+- `pack4_ram_v1` - Packed RAM lanes `[used, free, shared, buff/cache]` (each lane is scaled percent x100)
 - `disk:{path}` - Disk used percent for each configured mount path
 - `inode:{path}` - Inode used percent for each configured mount path
 - `iops:{path}` - Disk I/O operations per second for each configured mount path
 - `throughput:{path}` - Disk throughput (bytes/sec) for each configured mount path
-- `lvm:data:{vg}/{lv}` - LVM thin volume/pool data usage percent
-- `lvm:meta:{vg}/{lv}` - LVM thin volume/pool metadata usage percent
+- `pack2_lvm_v1_{vg}/{lv}` - Packed LVM thin usage lanes `[data_percent, meta_percent]` (lane3/4 reserved)
 - `net:{iface}:bytes` - Bytes transferred during the interval (rx + tx)
 - `net:{iface}:packets` - Packets transferred during the interval (rx + tx)
 
@@ -27,8 +26,7 @@ Examples:
 - `inode:/tmp`
 - `iops:/`
 - `throughput:/tmp`
-- `lvm:data:vg0/thinpool`
-- `lvm:meta:vg0/thinpool`
+- `pack2_lvm_v1_vg0/thinpool`
 - `net:eth0:bytes`
 - `net:eth0:packets`
 
@@ -41,8 +39,8 @@ The agent sends:
   "agent_version": 1,
   "ts": 1775340000,
   "metrics": {
-    "pack_cpu_v1": 1125917086976090,
-    "pack_ram_v1": 13258617121480734,
+    "pack4_cpu_v1": 1125917086976090,
+    "pack4_ram_v1": 13258617121480734,
     "disk:/": 44,
     "disk:/tmp": 8,
     "inode:/": 71,

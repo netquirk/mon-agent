@@ -64,11 +64,8 @@ func TestDiskIOKey(t *testing.T) {
 }
 
 func TestLVMMetricKey(t *testing.T) {
-	if got := lvmThinDataMetricKey("vg0", "thinpool"); got != "lvm:data:vg0/thinpool" {
-		t.Fatalf("unexpected lvm data key: %s", got)
-	}
-	if got := lvmThinMetaMetricKey("vg0", "thinpool"); got != "lvm:meta:vg0/thinpool" {
-		t.Fatalf("unexpected lvm meta key: %s", got)
+	if got := lvmPackedMetricKey("vg0", "thinpool"); got != "pack2_lvm_v1_vg0/thinpool" {
+		t.Fatalf("unexpected lvm packed key: %s", got)
 	}
 }
 
@@ -256,9 +253,10 @@ func TestParseLVMPercentToken(t *testing.T) {
 		want   uint64
 		wantOK bool
 	}{
-		{in: "45.2", want: 45, wantOK: true},
-		{in: "45.6", want: 46, wantOK: true},
-		{in: "100.0", want: 100, wantOK: true},
+		{in: "45.2", want: 4520, wantOK: true},
+		{in: "45.6", want: 4560, wantOK: true},
+		{in: "45.67", want: 4567, wantOK: true},
+		{in: "100.0", want: 10000, wantOK: true},
 		{in: "-", want: 0, wantOK: false},
 		{in: "", want: 0, wantOK: false},
 		{in: "x", want: 0, wantOK: false},

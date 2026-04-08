@@ -797,11 +797,10 @@ func readLVMThinUsage() (map[string]uint64, error) {
 				continue
 			}
 
-			if dataPct, ok := parseLVMPercentToken(row.DataPercent); ok {
-				out[lvmThinDataMetricKey(vg, lv)] = dataPct
-			}
-			if metaPct, ok := parseLVMPercentToken(row.MetadataPercent); ok {
-				out[lvmThinMetaMetricKey(vg, lv)] = metaPct
+			dataPct, dataOK := parseLVMPercentToken(row.DataPercent)
+			metaPct, metaOK := parseLVMPercentToken(row.MetadataPercent)
+			if dataOK || metaOK {
+				out[lvmPackedMetricKey(vg, lv)] = packU16x4(dataPct, metaPct, 0, 0)
 			}
 		}
 	}
@@ -818,5 +817,5 @@ func parseLVMPercentToken(raw string) (uint64, bool) {
 	if err != nil {
 		return 0, false
 	}
-	return percentToUint64(f), true
+	return percentToScaled100Uint64(f), true
 }
