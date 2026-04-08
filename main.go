@@ -72,10 +72,10 @@ type cpuBreakdown struct {
 }
 
 type pushPayload struct {
-	AgentVersion uint64            `json:"agent_version"`
-	Timestamp    int64             `json:"ts"`
-	Metrics      map[string]uint64 `json:"metrics"`
-	IngestMode   string            `json:"ingest_mode,omitempty"`
+	AgentVersion uint64                     `json:"agent_version"`
+	Timestamp    int64                      `json:"ts"`
+	Metrics      map[string]json.RawMessage `json:"metrics"`
+	IngestMode   string                     `json:"ingest_mode,omitempty"`
 }
 
 type pushBatchRequest struct {
@@ -191,7 +191,7 @@ func main() {
 
 	runOnce := func() error {
 		runStartedAt := time.Now()
-		metrics := make(map[string]uint64)
+		metrics := make(map[string]json.RawMessage)
 
 		if cfg.includeCPU {
 			current, err := readCPUSnapshot()
@@ -202,12 +202,12 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("compute cpu breakdown: %w", err)
 			}
-			metrics[packedCPUKey] = packU16x4(
+			addUint64Metric(metrics, packedCPUKey, packU16x4(
 				percentToScaled100Uint64(cpu.user),
 				percentToScaled100Uint64(cpu.system),
 				percentToScaled100Uint64(cpu.iowait),
 				percentToScaled100Uint64(cpu.steal),
-			)
+			))
 			prevCPU = current
 		}
 
@@ -216,15 +216,15 @@ func main() {
 			if err != nil {
 				return fmt.Errorf("read ram usage: %w", err)
 			}
-			metrics[packedRAMKey] = packU16x4(
+			addUint64Metric(metrics, packedRAMKey, packU16x4(
 				percentToScaled100Uint64(ram.used),
 				percentToScaled100Uint64(ram.free),
 				percentToScaled100Uint64(ram.shared),
 				percentToScaled100Uint64(ram.buff),
-			)
+			))
 		}
 		if loadAvgScaled, err := readLoadAverageScaled(); err == nil {
-			metrics["loadavg"] = loadAvgScaled
+			addUint64Metric(metrics, "loadavg", loadAvgScaled)
 		} else {
 			log.Printf("loadavg metric failed: %v", err)
 		}
@@ -238,10 +238,12 @@ func main() {
 				if !ok {
 					continue
 				}
-				metrics[netBytesMetricKey(iface, "rx")] = counterDelta(cur.rxBytes, prev.rxBytes)
-				metrics[netBytesMetricKey(iface, "tx")] = counterDelta(cur.txBytes, prev.txBytes)
-				metrics[netPacketsMetricKey(iface, "rx")] = counterDelta(cur.rxPackets, prev.rxPackets)
-				metrics[netPacketsMetricKey(iface, "tx")] = counterDelta(cur.txPackets, prev.txPackets)
+				addUint64ArrayMetric(metrics, netVecMetricKey(iface), []uint64{
+					counterDelta(cur.rxBytes, prev.rxBytes),
+					counterDelta(cur.txBytes, prev.txBytes),
+					counterDelta(cur.rxPackets, prev.rxPackets),
+					counterDelta(cur.txPackets, prev.txPackets),
+				})
 			}
 			prevNet = currentNet
 		}
@@ -252,14 +254,14 @@ func main() {
 				log.Printf("disk metric failed for %q: %v", target.path, err)
 				continue
 			}
-			metrics[diskMetricKey(target.path)] = percentToUint64(usedPercent)
+			addUint64Metric(metrics, diskMetricKey(target.path), percentToUint64(usedPercent))
 
 			inodePercent, err := readInodeUsagePercent(target, btrfsBinary)
 			if err != nil {
 				log.Printf("inode metric failed for %q: %v", target.path, err)
 				continue
 			}
-			metrics[inodeMetricKey(target.path)] = percentToUint64(inodePercent)
+			addUint64Metric(metrics, inodeMetricKey(target.path), percentToUint64(inodePercent))
 		}
 		if prevDisk != nil {
 			currentDisk, err := readDiskSnapshot()
@@ -274,9 +276,9 @@ func main() {
 						if ioErr != nil {
 							continue
 						}
-						metrics[iopsMetricKey(target.path)] = iops
-						metrics[throughputMetricKey(target.path, "rx")] = throughputRead
-						metrics[throughputMetricKey(target.path, "tx")] = throughputWrite
+						addUint64Metric(metrics, iopsMetricKey(target.path), iops)
+						addUint64Metric(metrics, throughputMetricKey(target.path, "rx"), throughputRead)
+						addUint64Metric(metrics, throughputMetricKey(target.path, "tx"), throughputWrite)
 					}
 				}
 				prevDisk = currentDisk
@@ -289,7 +291,7 @@ func main() {
 				log.Printf("lvm thin metrics failed: %v", err)
 			} else {
 				for k, v := range lvmMetrics {
-					metrics[k] = v
+					addUint64Metric(metrics, k, v)
 				}
 			}
 		}
@@ -302,7 +304,7 @@ func main() {
 		if processingMs < 1 {
 			processingMs = 1
 		}
-		metrics["time_ms"] = uint64(processingMs)
+		addUint64Metric(metrics, "time_ms", uint64(processingMs))
 
 		payload := pushPayload{
 			AgentVersion: encodedAgentVersion,
@@ -508,12 +510,8 @@ func lvmPackedMetricKey(vg, lv string) string {
 	return "pack2_lvm_v1_" + vg + "/" + lv
 }
 
-func netBytesMetricKey(iface, direction string) string {
-	return "net:" + iface + ":bytes:" + direction
-}
-
-func netPacketsMetricKey(iface, direction string) string {
-	return "net:" + iface + ":packets:" + direction
+func netVecMetricKey(iface string) string {
+	return "vec_net_" + iface
 }
 
 func cpuMetricKey(part string) string {
@@ -522,6 +520,18 @@ func cpuMetricKey(part string) string {
 
 func ramMetricKey(part string) string {
 	return "ram:" + part
+}
+
+func addUint64Metric(metrics map[string]json.RawMessage, key string, value uint64) {
+	metrics[key] = json.RawMessage(strconv.AppendUint(make([]byte, 0, 20), value, 10))
+}
+
+func addUint64ArrayMetric(metrics map[string]json.RawMessage, key string, values []uint64) {
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		return
+	}
+	metrics[key] = encoded
 }
 
 func counterDelta(current, previous uint64) uint64 {

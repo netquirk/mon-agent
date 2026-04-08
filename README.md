@@ -15,8 +15,7 @@ Automatic updates are intentionally disabled for security reasons. See [SECURITY
 - `iops:{path}` - Disk I/O operations per second for each configured mount path
 - `throughput:{path}` - Disk throughput (bytes/sec) for each configured mount path
 - `pack2_lvm_v1_{vg}/{lv}` - Packed LVM thin usage lanes `[data_percent, meta_percent]` (lane3/4 reserved)
-- `net:{iface}:bytes` - Bytes transferred during the interval (rx + tx)
-- `net:{iface}:packets` - Packets transferred during the interval (rx + tx)
+- `vec_net_{iface}` - 4-lane net vector `[rx_bytes, tx_bytes, rx_packets, tx_packets]`
 
 Examples:
 
@@ -27,8 +26,7 @@ Examples:
 - `iops:/`
 - `throughput:/tmp`
 - `pack2_lvm_v1_vg0/thinpool`
-- `net:eth0:bytes`
-- `net:eth0:packets`
+- `vec_net_eth0`
 
 ## Payload Format
 
@@ -47,13 +45,12 @@ The agent sends:
     "inode:/tmp": 3,
     "iops:/": 23,
     "throughput:/": 196608,
-    "net:eth0:bytes": 12488,
-    "net:eth0:packets": 83
+    "vec_net_eth0": [12488, 9312, 83, 62]
   }
 }
 ```
 
-All metric values are emitted as `uint64` integers. CPU/RAM lanes are packed into a single `uint64` per group and stored as scaled percent (`percent x100`) per lane.
+All scalar metric values are emitted as `uint64` integers. CPU/RAM lanes are packed into a single `uint64` per group and stored as scaled percent (`percent x100`) per lane. Net interface metrics use a 4-lane integer vector payload.
 
 ## Btrfs Inode Handling
 

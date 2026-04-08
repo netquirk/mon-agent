@@ -70,17 +70,8 @@ func TestLVMMetricKey(t *testing.T) {
 }
 
 func TestNetMetricKeys(t *testing.T) {
-	if got := netBytesMetricKey("eth0", "rx"); got != "net:eth0:bytes:rx" {
-		t.Fatalf("unexpected bytes key: %s", got)
-	}
-	if got := netBytesMetricKey("eth0", "tx"); got != "net:eth0:bytes:tx" {
-		t.Fatalf("unexpected bytes key: %s", got)
-	}
-	if got := netPacketsMetricKey("eth0", "rx"); got != "net:eth0:packets:rx" {
-		t.Fatalf("unexpected packets key: %s", got)
-	}
-	if got := netPacketsMetricKey("eth0", "tx"); got != "net:eth0:packets:tx" {
-		t.Fatalf("unexpected packets key: %s", got)
+	if got := netVecMetricKey("eth0"); got != "vec_net_eth0" {
+		t.Fatalf("unexpected vec net key: %s", got)
 	}
 }
 
@@ -203,11 +194,11 @@ func TestPushPayloadMetricsMarshalAsIntegers(t *testing.T) {
 	payload := pushPayload{
 		AgentVersion: (1 << 42) | 1,
 		Timestamp:    1775340000,
-		Metrics: map[string]uint64{
-			"cpu:user": 12,
-			"inode:/":  4930021,
-		},
+		Metrics:      map[string]json.RawMessage{},
 	}
+	addUint64Metric(payload.Metrics, "cpu:user", 12)
+	addUint64Metric(payload.Metrics, "inode:/", 4930021)
+	addUint64ArrayMetric(payload.Metrics, "vec_net_eth0", []uint64{100, 200, 10, 20})
 	b, err := json.Marshal(payload)
 	if err != nil {
 		t.Fatalf("marshal failed: %v", err)
@@ -215,6 +206,9 @@ func TestPushPayloadMetricsMarshalAsIntegers(t *testing.T) {
 	s := string(b)
 	if strings.Contains(s, ".") {
 		t.Fatalf("expected integer-only JSON values, got %s", s)
+	}
+	if !strings.Contains(s, "\"vec_net_eth0\":[100,200,10,20]") {
+		t.Fatalf("expected 4-lane net metric in payload, got %s", s)
 	}
 }
 
