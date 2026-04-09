@@ -10,7 +10,7 @@ Automatic updates are intentionally disabled for security reasons. See [SECURITY
 
 - `pack4_cpu` - Packed CPU lanes `[user, system, iowait, steal]` (each lane is scaled percent x100)
 - `pack4_ram` - Packed RAM lanes `[used, free, shared, buff/cache]` (each lane is scaled percent x100)
-- `pack2_disk_{path}` - Packed disk/inode usage lanes `[disk_used_percent, inode_used_percent]`
+- `pack2_disk_{path}` - Packed disk/inode usage lanes `[disk_used_percent, inode_used_percent]` (each lane is scaled percent x100)
 - `vec_disk_{path}` - 4-lane disk IO vector `[read_bps, write_bps, read_iops, write_iops]`
 - `pack2_lvm_{vg}/{lv}` - Packed LVM thin usage lanes `[data_percent, meta_percent]`
 - `vec_net_{iface}` - 4-lane net vector `[rx_bytes, tx_bytes, rx_packets, tx_packets]`
@@ -26,15 +26,15 @@ The agent sends:
   "metrics": {
     "pack4_cpu": 1125917086976090,
     "pack4_ram": 13258617121480734,
-    "pack2_disk_/": [44, 71],
-    "pack2_disk_/tmp": [8, 3],
+    "pack2_disk_/": 30494267806000,
+    "pack2_disk_/tmp": 1288490189600,
     "vec_disk_/": [98304, 98304, 12, 11],
     "vec_net_eth0": [12488, 9312, 83, 62]
   }
 }
 ```
 
-All scalar metric values are emitted as `uint64` integers. CPU/RAM lanes are packed into a single `uint64` per group and stored as scaled percent (`percent x100`) per lane. Net interface metrics use a 4-lane integer vector payload.
+All scalar metric values are emitted as `uint64` integers. Packed metrics (`pack4_*`, `pack2_*`) encode multiple lanes into a single `uint64`: `pack4` uses four u16 lanes, `pack2` uses two u32 lanes. Percent values are stored as scaled percent x100 (e.g. 44.71% → 4471). Net and disk IO metrics use multi-lane integer vector payloads.
 
 ## Btrfs Inode Handling
 

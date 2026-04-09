@@ -260,10 +260,10 @@ func main() {
 				log.Printf("inode metric failed for %q: %v", target.path, err)
 				continue
 			}
-			addUint64ArrayMetric(metrics, diskInodePackedMetricKey(target.path), []uint64{
-				percentToUint64(usedPercent),
-				percentToUint64(inodePercent),
-			})
+			addUint64Metric(metrics, diskInodePackedMetricKey(target.path), packU32x2(
+				percentToScaled100Uint64(usedPercent),
+				percentToScaled100Uint64(inodePercent),
+			))
 		}
 		if prevDisk != nil {
 			currentDisk, err := readDiskSnapshot()
