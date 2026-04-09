@@ -17,8 +17,8 @@ GitHub releases are automated by workflow:
 1. Create and push a tag:
 
 ```bash
-git tag agent-v1.0.0
-git push origin agent-v1.0.0
+git tag 1.0.0
+git push 1.0.0
 ```
 
 2. GitHub Actions will:
